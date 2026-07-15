@@ -110,6 +110,27 @@ def test_verify_wrong_fence(store):
     assert store.verify_lock("discord:1", "taliesin", 99) is False
 
 
+def test_verify_after_grace_expired(store_fast_ttl):
+    """verify_lock returns false after expiry AND grace period."""
+    store_fast_ttl.claim_channel("discord:1", "taliesin")
+    time.sleep(0.2)  # expired (100ms), but still within 10s grace
+    assert store_fast_ttl.verify_lock("discord:1", "taliesin", 1) is True
+    # simulate clock past grace
+    original_now = store_fast_ttl._now_ms
+    store_fast_ttl._now_ms = lambda: original_now() + 11_000
+    assert store_fast_ttl.verify_lock("discord:1", "taliesin", 1) is False
+    store_fast_ttl._now_ms = original_now
+
+
+def test_same_claimant_re_claim_extends_ttl(store_fast_ttl):
+    """Re-claiming while holding the lock extends expires_at."""
+    store_fast_ttl.claim_channel("discord:1", "taliesin")
+    time.sleep(0.05)  # 50ms, not expired
+    store_fast_ttl.claim_channel("discord:1", "taliesin")  # re-claim extends
+    time.sleep(0.08)  # would have expired without the re-claim extension
+    assert store_fast_ttl.verify_lock("discord:1", "taliesin", 1) is True
+
+
 # ── renew_lease tests ────────────────────────────────────────────────────
 
 
@@ -199,15 +220,22 @@ def test_consecutive_timeouts_accumulate(store_fast_ttl):
 
 
 def test_consecutive_timeouts_reset_on_release(store_fast_ttl):
-    store_fast_ttl.claim_channel("discord:1", "taliesin")
+    """A profile with timeouts gets them reset on successful release."""
+    # gwydion expires, taliesin claims → gwydion=1.
+    # gwydion expires again, taliesin claims → gwydion=2.
+    # gwydion finally succeeds and releases → gwydion=0.
+    store_fast_ttl.claim_channel("discord:1", "gwydion")
     time.sleep(0.2)
-    store_fast_ttl.claim_channel("discord:1", "gwydion")  # taliesin times out
+    store_fast_ttl.claim_channel("discord:1", "taliesin")  # gwydion=1
     time.sleep(0.2)
-    store_fast_ttl.claim_channel("discord:1", "vera")  # gwydion times out
-    store_fast_ttl.release_channel("discord:1", "vera", 3, "100")
-
-    timeouts = store_fast_ttl._get_timeouts("discord:1", "vera")
-    assert timeouts == 0
+    store_fast_ttl.claim_channel("discord:1", "gwydion")   # gwydion reclaims
+    time.sleep(0.2)
+    store_fast_ttl.claim_channel("discord:1", "taliesin")  # gwydion=2
+    time.sleep(0.2)
+    store_fast_ttl.claim_channel("discord:1", "gwydion")   # gwydion reclaims
+    assert store_fast_ttl._get_timeouts("discord:1", "gwydion") == 2
+    store_fast_ttl.release_channel("discord:1", "gwydion", 5, "100")
+    assert store_fast_ttl._get_timeouts("discord:1", "gwydion") == 0
 
 
 # ── cursor tests ─────────────────────────────────────────────────────────
