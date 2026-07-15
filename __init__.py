@@ -17,7 +17,6 @@ RELEASE_MAX_RETRIES = 3
 
 _lock_store = None
 _buffer = None
-_buffer_lock = None
 _profile_name = None
 _last_message_id = None
 
@@ -260,6 +259,7 @@ def register(ctx):
     _buffer = MessageBuffer()
 
     ctx.register_hook("pre_gateway_dispatch", on_pre_gateway_dispatch)
+    ctx.register_hook("transform_llm_output", on_transform_llm_output)
     ctx.register_tool(name="verify_lock", toolset="mutex-coordinator",
                       schema=VERIFY_LOCK_SCHEMA, handler=verify_lock_tool)
     ctx.register_tool(name="renew_lease", toolset="mutex-coordinator",
@@ -329,3 +329,39 @@ def release_channel_tool(args, **kwargs):
         logger.info("lock_released channel=%s cursor=%s",
                      args["channel_id"], args["last_message_id"])
     return json.dumps(result)
+
+
+# ── pre-send noise gate ──────────────────────────────────────────────────────
+
+# Patterns that indicate the agent has nothing of value to add.
+# Agent responses matching any are rewritten to [SILENT] so the
+# gateway suppresses delivery. No message is sent to Discord.
+_NOISE_PATTERNS = (
+    "*holding*", "*waiting*", "standing by", "ready.",
+    "*—*", "👍", "👀",
+)
+
+_NOISE_EXACT = frozenset((
+    "noted", "ack", "ok", "ack.", "ok.", "noted.",
+    "holding", "waiting", "ready", "standing by",
+))
+
+
+def _is_noise(text: str) -> bool:
+    """Return True when `text` is a reflexive noise response."""
+    stripped = text.strip().rstrip(".,!?")
+    low = stripped.lower()
+    if low in _NOISE_EXACT:
+        return True
+    for p in _NOISE_PATTERNS:
+        if p in low:
+            return True
+    return False
+
+
+def on_transform_llm_output(response_text, session_id, model, platform, **kwargs):
+    """Pre-send gate: suppress reflexive noise via the [SILENT] protocol."""
+    if _is_noise(response_text):
+        logger.info("noise_suppressed profile=%s len=%d", _profile_name, len(response_text))
+        return "[SILENT]"
+    return None

@@ -2,39 +2,43 @@
 
 This plugin serializes Hermes bots in Discord channels via a channel-level
 mutex. You share channels with other coordinated bots. Only one bot processes
-messages at a time. While you wait, messages accumulate and are delivered to
-you as a complete batch when you acquire the lock.
+messages at a time. While waiting, messages are buffered and delivered when
+you acquire the lock.
 
-## Your Turn
+## Lock Protocol
 
-When you acquire the lock, you receive all messages that accumulated since
-your last turn. Read the full context before acting.
+When you receive a message:
 
-## Lock Operations
-
-You have three tools available during your turn:
-
-- **verify_lock(channel_id, fence)** — Call before sending a response.
-  Returns `{"valid": true}` or `{"valid": false}`. If false, discard your
-  response — you lost the lock.
-
-- **renew_lease(channel_id, fence)** — Call mid-processing if your turn is
-  taking longer than expected. Returns `{"status": "renewed"}` or
-  `{"status": "expired", "by": "<other>"}`. If expired, abort immediately.
-
-- **release_channel(channel_id, fence, last_message_id)** — Call after
-  responding or passing. Releases the lock so another bot can take a turn.
+1. The plugin claims the channel lock before you see anything.
+2. If you acquire the lock, you receive the full message context (including
+   any buffered messages from while you were waiting).
+3. If another bot holds the lock, the message is buffered — you never see it.
+4. After responding or passing, call `release_channel` so the next bot can
+   take a turn.
+5. Before sending a response, call `verify_lock` to confirm you still hold
+   the lock. If the fence doesn't match, do not send — the lock expired.
+6. If your turn is running long, call `renew_lease` to extend the lock.
 
 ## Consecutive Timeouts
 
-You may see a `[consecutive_timeouts: N]` preamble in the messages. This
-means your previous turns have timed out. You do not need to respond to
-everything. No human can. Prioritize:
+If you see `[consecutive_timeouts: N]` in your context preamble, you have
+exceeded the lock TTL N times in a row on previous turns. If N > 0, you are
+behind — take less time. Prioritize @mentions and explicit assignments.
+You do not need to respond to everything. No human can.
 
-- @mentions of your name — always respond
-- Direct questions addressed to you
-- Tasks explicitly assigned to you
+## Silence Is a Valid Response
 
-Other messages: you may respond if you have something genuinely useful to
-add, but it is not required. Silence is a valid turn. Passing is not
-failure.
+When you have nothing of value to add, stay silent. Do not emit
+reflexive acknowledgments like "noted", "ack", "ok", "*—*", 👍, 👀.
+Do not announce your state: "Holding", "Waiting", "Ready", "Standing by".
+These are noise. They echo. They make the channel worse.
+
+When you hold the lock and have nothing to say, call `release_channel`
+and respond with `[SILENT]`. The gateway will suppress delivery.
+The next bot takes the lock. The channel stays quiet.
+
+## Tools
+
+- `verify_lock(channel_id, fence)` → `{"valid": true|false}`
+- `renew_lease(channel_id, fence)` → `{"status": "renewed"|"expired"}`
+- `release_channel(channel_id, fence, last_message_id)` → `{"status": "released"|"stale_fence"}`

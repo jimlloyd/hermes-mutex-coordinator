@@ -3,6 +3,7 @@ version: 0.1.0
 description: Channel-level mutex for Hermes bot coordination — serialized turns via coordination.db
 provides_hooks:
   - pre_gateway_dispatch
+  - transform_llm_output
 provides_tools:
   - verify_lock
   - renew_lease
