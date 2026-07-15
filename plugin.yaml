@@ -1,0 +1,11 @@
+name: mutex-coordinator
+version: 0.1.0
+description: Channel-level mutex for Hermes bot coordination — serialized turns via coordination.db
+provides_hooks:
+  - pre_gateway_dispatch
+provides_tools:
+  - verify_lock
+  - renew_lease
+  - release_channel
+provides_skills:
+  - mutex-coordinator

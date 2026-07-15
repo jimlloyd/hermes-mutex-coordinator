@@ -1,0 +1,4 @@
+[tool.pytest.ini_options]
+addopts = "-n 0"
+testpaths = ["tests"]
+norecursedirs = ["skills"]
