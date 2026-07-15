@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from mutex_coordinator.lock_store import GRACE_PERIOD_MS, LockStore
+from __init__ import GRACE_PERIOD_MS, LockStore
 
 
 @pytest.fixture
