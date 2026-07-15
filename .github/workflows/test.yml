@@ -18,7 +18,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install pytest
+        run: pip install pytest pytest-xdist
 
       - name: Run tests
         run: python -m pytest tests/ -n 0 -v
