@@ -1,6 +1,5 @@
 """Mutex Coordinator plugin for Hermes Agent."""
 
-import asyncio
 import json
 import logging
 import sqlite3
@@ -247,7 +246,7 @@ class MessageBuffer:
 # ── registration ─────────────────────────────────────────────────────────────
 
 def register(ctx):
-    global _lock_store, _buffer, _buffer_lock, _profile_name
+    global _lock_store, _buffer, _profile_name
 
     _profile_name = ctx.profile_name
 
@@ -259,7 +258,6 @@ def register(ctx):
 
     _lock_store = LockStore(db_path)
     _buffer = MessageBuffer()
-    _buffer_lock = asyncio.Lock()
 
     ctx.register_hook("pre_gateway_dispatch", on_pre_gateway_dispatch)
     ctx.register_tool(name="verify_lock", toolset="mutex-coordinator",
@@ -277,7 +275,7 @@ def register(ctx):
 
 # ── hook handler ─────────────────────────────────────────────────────────────
 
-async def on_pre_gateway_dispatch(event, gateway, session_store, **kwargs):
+def on_pre_gateway_dispatch(event, gateway, session_store, **kwargs):
     global _last_message_id
 
     channel_id = f"discord:{event.source.chat_id}"
@@ -286,8 +284,7 @@ async def on_pre_gateway_dispatch(event, gateway, session_store, **kwargs):
     result = _lock_store.claim_channel(channel_id, _profile_name)
 
     if result["status"] == "acquired":
-        async with _buffer_lock:
-            buf = _buffer.flush(channel_id)
+        buf = _buffer.flush(channel_id)
 
         timeouts = result.get("consecutive_timeouts", 0)
         preamble = f"[consecutive_timeouts: {timeouts}]\n\n" if timeouts > 0 else ""
@@ -302,11 +299,10 @@ async def on_pre_gateway_dispatch(event, gateway, session_store, **kwargs):
         return {"action": "rewrite", "text": text}
 
     elif result["status"] == "locked":
-        async with _buffer_lock:
-            _buffer.append(channel_id, {
-                "user_name": event.user_name, "user_id": event.user_id,
-                "text": event.text, "message_id": event.message_id,
-            })
+        _buffer.append(channel_id, {
+            "user_name": event.user_name, "user_id": event.user_id,
+            "text": event.text, "message_id": event.message_id,
+        })
         return {"action": "skip"}
 
     return {"action": "allow"}
