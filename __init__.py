@@ -337,7 +337,7 @@ def release_channel_tool(args, **kwargs):
 # Agent responses matching any are rewritten to [SILENT] so the
 # gateway suppresses delivery. No message is sent to Discord.
 _NOISE_PATTERNS = (
-    "*holding*", "*waiting*", "standing by", "ready.",
+    "⚡ interrupting", "*holding*", "*waiting*", "standing by", "ready.",
     "*—*", "👍", "👀",
 )
 
