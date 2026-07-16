@@ -301,10 +301,12 @@ def on_pre_gateway_dispatch(event, gateway, session_store, **kwargs):
         return {"action": "rewrite", "text": text}
 
     elif result["status"] == "locked":
+        logger.info("buffering message channel=%s", channel_id)
         _buffer.append(channel_id, {
             "user_name": event.user_name, "user_id": event.user_id,
             "text": event.text, "message_id": event.message_id,
         })
+        logger.info("returning skip channel=%s", channel_id)
         return {"action": "skip"}
 
     return {"action": "allow"}
