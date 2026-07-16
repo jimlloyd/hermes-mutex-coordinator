@@ -347,7 +347,8 @@ def release_channel_tool(args, **kwargs):
 # gateway suppresses delivery. No message is sent to Discord.
 _NOISE_PATTERNS = (
     "⚡ interrupting", "*holding*", "*waiting*", "standing by", "ready.",
-    "*—*", "👍", "👀",
+    "*—*", "👍", "👀", "passed silently", "no response warranted",
+    "no response needed",
 )
 
 _NOISE_EXACT = frozenset((
