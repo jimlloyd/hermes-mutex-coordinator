@@ -287,9 +287,14 @@ def on_pre_gateway_dispatch(event, gateway, session_store, **kwargs):
 
     if result["status"] == "acquired":
         buf = _buffer.flush(channel_id)
-
+        fence = result["fence"]
         timeouts = result.get("consecutive_timeouts", 0)
-        preamble = f"[consecutive_timeouts: {timeouts}]\n\n" if timeouts > 0 else ""
+
+        lock_header = f"[lock: {channel_id} fence={fence} msgid={_last_message_id}]"
+        parts = [lock_header]
+        if timeouts > 0:
+            parts.append(f"consecutive_timeouts: {timeouts}")
+        preamble = "\n".join(parts) + "\n\n" if parts else ""
 
         if buf:
             text = f"{preamble}{buf}[New message]\n{event.source.user_name or event.source.user_id}: {event.text}"

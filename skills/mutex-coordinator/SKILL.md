@@ -1,41 +1,51 @@
 # Mutex Coordinator
 
-This plugin serializes Hermes bots in Discord channels via a channel-level
-mutex. You share channels with other coordinated bots. Only one bot processes
-messages at a time. While waiting, messages are buffered and delivered when
-you acquire the lock.
+This plugin serializes Hermes bots in Discord channels. Only one bot
+processes messages at a time. Messages that arrive while another bot
+holds the lock are buffered and delivered when you acquire the lock.
 
 ## Lock Protocol
 
-When you receive a message:
+Every message you see starts with a lock header:
 
-1. The plugin claims the channel lock before you see anything.
-2. If you acquire the lock, you receive the full message context (including
-   any buffered messages from while you were waiting).
-3. If another bot holds the lock, the message is buffered — you never see it.
-4. After responding or passing, call `release_channel` so the next bot can
-   take a turn.
-5. Before sending a response, call `verify_lock` to confirm you still hold
-   the lock. If the fence doesn't match, do not send — the lock expired.
-6. If your turn is running long, call `renew_lease` to extend the lock.
+```
+[lock: discord:123456 fence=5 msgid=abc123]
+consecutive_timeouts: 2          (only present if > 0)
+
+@username: message text
+```
+
+The `channel_id`, `fence`, and `msgid` are your credentials. Use them
+verbatim with the tools below. After every turn — whether you respond
+or stay silent — call `release_channel`.
+
+## Your Turn
+
+1. You hold the lock. Process the messages. Compose a response.
+2. Before sending, call `verify_lock(channel_id, fence)`. If false, the
+   lock expired — do not send, just stop.
+3. If your turn is taking long, call `renew_lease(channel_id, fence)`.
+4. Send your response (or `[SILENT]` — see below).
+5. Call `release_channel(channel_id, fence, msgid)`.
+
+## Silence
+
+When you have nothing of value to add, your final response must be
+EXACTLY `[SILENT]` (8 characters, no other text). The gateway will
+suppress delivery. The next bot gets the lock. The channel stays quiet.
+
+Do NOT emit reflexive acknowledgments: "noted", "ack", "ok", "*—*".
+Do NOT announce your state: "Holding", "Waiting", "Ready", "Standing by".
+These are noise. The plugin will catch them, but you waste tokens and
+still need to call `release_channel`.
+
+Step 5 is mandatory — silence or not, release the lock.
 
 ## Consecutive Timeouts
 
-If you see `[consecutive_timeouts: N]` in your context preamble, you have
-exceeded the lock TTL N times in a row on previous turns. If N > 0, you are
-behind — take less time. Prioritize @mentions and explicit assignments.
-You do not need to respond to everything. No human can.
-
-## Silence Is a Valid Response
-
-When you have nothing of value to add, stay silent. Do not emit
-reflexive acknowledgments like "noted", "ack", "ok", "*—*", 👍, 👀.
-Do not announce your state: "Holding", "Waiting", "Ready", "Standing by".
-These are noise. They echo. They make the channel worse.
-
-When you hold the lock and have nothing to say, call `release_channel`
-and respond with `[SILENT]`. The gateway will suppress delivery.
-The next bot takes the lock. The channel stays quiet.
+If `consecutive_timeouts: N` appears and N > 0, you have exceeded the
+TTL on previous turns. You are behind. Prioritize @mentions and explicit
+assignments. If nothing is for you, `[SILENT]` + `release_channel`.
 
 ## Tools
 
