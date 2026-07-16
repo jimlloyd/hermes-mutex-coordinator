@@ -292,9 +292,9 @@ def on_pre_gateway_dispatch(event, gateway, session_store, **kwargs):
         preamble = f"[consecutive_timeouts: {timeouts}]\n\n" if timeouts > 0 else ""
 
         if buf:
-            text = f"{preamble}{buf}[New message]\n{event.user_name or event.user_id}: {event.text}"
+            text = f"{preamble}{buf}[New message]\n{event.source.user_name or event.source.user_id}: {event.text}"
         else:
-            text = f"{preamble}@{event.user_name or event.user_id}: {event.text}"
+            text = f"{preamble}@{event.source.user_name or event.source.user_id}: {event.text}"
 
         logger.info("lock_acquired channel=%s claimant=%s fence=%d timeouts=%d",
                      channel_id, _profile_name, result["fence"], timeouts)
@@ -303,7 +303,7 @@ def on_pre_gateway_dispatch(event, gateway, session_store, **kwargs):
     elif result["status"] == "locked":
         logger.info("buffering message channel=%s", channel_id)
         _buffer.append(channel_id, {
-            "user_name": event.user_name, "user_id": event.user_id,
+            "user_name": event.source.user_name, "user_id": event.source.user_id,
             "text": event.text, "message_id": event.message_id,
         })
         logger.info("returning skip channel=%s", channel_id)
