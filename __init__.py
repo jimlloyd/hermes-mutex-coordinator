@@ -280,6 +280,7 @@ def on_pre_gateway_dispatch(event, gateway, session_store, **kwargs):
 
     channel_id = f"discord:{event.source.chat_id}"
     _last_message_id = event.message_id
+    logger.info("pre_gateway_dispatch firing profile=%s chat=%s", _profile_name, channel_id)
 
     result = _lock_store.claim_channel(channel_id, _profile_name)
 
