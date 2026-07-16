@@ -75,7 +75,7 @@ class LockStore:
         self._load_ttl()
 
     def _init_db(self) -> None:
-        conn = sqlite3.connect(str(self.db_path))
+        conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA busy_timeout=5000")
         conn.execute("""CREATE TABLE IF NOT EXISTS channel_locks (
